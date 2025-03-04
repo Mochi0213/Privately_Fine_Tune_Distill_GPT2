@@ -1,4 +1,10 @@
 import torch
+"""
+Copyright (c) Shanghai Key Laboratory of Trustworthy Computing
+
+This code was written by Dr. Jie Fu and published at:
+https://github.com/JeffffffFu/DPSUR
+"""
 
 def make_optimizer_class(cls):
     class DPOptimizerClass(cls):
