@@ -23,18 +23,18 @@ Some comparison distributions are listed below:
 
 1-Way Marginal Distributions:
 
-![myplot1](C:\Users\Mochi\Desktop\lfs\myplot1.png)
+![myplot1](distributions/myplot1.png)
 
-![myplot2](C:\Users\Mochi\Desktop\lfs\myplot2.png)
+![myplot2](distributions/myplot2.png)
 
-![myplot3](C:\Users\Mochi\Desktop\lfs\myplot3.png)
+![myplot3](distributions/myplot3.png)
 
-![myplot4](C:\Users\Mochi\Desktop\lfs\myplot4.png)
+![myplot4](distributions/myplot4.png)
 
 2-Way Marginal Distributions:
 
-![myplot6](C:\Users\Mochi\Desktop\lfs\myplot6.png)
+![myplot6](distributions/myplot6.png)
 
-![myplot7](C:\Users\Mochi\Desktop\lfs\myplot7.png)
+![myplot7](distributions/myplot7.png)
 
-![myplot8](C:\Users\Mochi\Desktop\lfs\myplot8.png)
+![myplot8](distributions/myplot8.png)
