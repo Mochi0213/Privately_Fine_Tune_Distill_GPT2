@@ -1,6 +1,6 @@
 # Privately_Fine_Tune_Distill_GPT2
 
-This is a PhD take-home assignment that involves fine-tuning DistilGPT-2 using adult100.csv (`./data/adult100.csv`) with differential privacy. In this assignment, I utilize the Hugging Face library and incorporate work I collaborated on with Jie Fu at the Shanghai Key Laboratory of Trustworthy Computing to construct a differential privacy (DP) module—without relying on Opacus or dp-transformers.
+This is a PhD take-home assignment that involves fine-tuning DistilGPT-2 using adult100.csv (`./data/adult100.csv`) with differential privacy. In this assignment, I utilize the Hugging Face library and incorporate private-transformers https://github.com/lxuechen/private-transformers.
 
 To reproduce this experiment, you can:
 
@@ -8,16 +8,21 @@ To reproduce this experiment, you can:
 
    pip install -r requirements.txt
 
-2. Use `csv2txt` to convert `adult100.csv` into text format, which should generate `processed_data.txt`.
+2. Install private-transformers
 
-3. Run `DPFineTuneGPT2.py` and modify the parameters if needed, or run `FineTuneGPT2.py` if you prefer fine-tuning without differential privacy.
-4. Use `generate_synthetic_data.py` to generate a new text file containing information similar to `adult100.csv`. The file should be stored as `synthetic_data_dp.txt` if fine-tuned with differential privacy or `synthetic_data.txt` if fine-tuned without differential privacy. The generation process may take some time.
-5. Run `txt2csv.py`, which should output `generated_adult100_dp.csv` if fine-tuned with differential privacy or `generated_adult100.csv` if fine-tuned without differential privacy. The output file will be stored in the `./data` directory.
-6. Run `comparison.py` to obtain 1-way-marginal and 2-way-marginal distributions by comparing `adult100.csv` with the newly generated CSV file.
+   pip install git+https://github.com/lxuechen/private-transformers.git
 
-Or, if you prefer not to fine-tune the model yourself, you can download the fine-tuned parameters from [this link](https://drive.google.com/file/d/1-7SfKqzZkUBbB-TvLyLBr0PfxR5QHA2H/view?usp=drive_link). Place the `.zip` file in the root directory and unzip it there.
+3. Use `csv2txt` to convert `adult100.csv` into text format, which should generate `processed_data.txt`.
 
-I implemented the entire project on my own machine with an RTX 4090 and Intel i9-13900KS. The differentially private fine-tuning process is expected to take around 5 minutes with 200 epochs and, under the default settings, satisfies Final (ε,6)-DP = (0.02, 1e-2).
+4. Run `DPFineTuneGPT2.py` and modify the parameters if needed, or run `FineTuneGPT2.py` if you prefer fine-tuning without differential privacy.
+
+5. Use `generate_synthetic_data.py` to generate a new text file containing information similar to `adult100.csv`. The file should be stored as `synthetic_data_dp.txt` if fine-tuned with differential privacy or `synthetic_data.txt` if fine-tuned without differential privacy. The generation process may take some time.
+
+6. Run `txt2csv.py`, which should output `generated_adult100_dp.csv` if fine-tuned with differential privacy or `generated_adult100.csv` if fine-tuned without differential privacy. The output file will be stored in the `./data` directory.
+
+7. Run `comparison.py` to obtain 1-way-marginal and 2-way-marginal distributions by comparing `adult100.csv` with the newly generated CSV file.
+
+I implemented the entire project on my own machine with an RTX 4090 and Intel i9-13900KS. The differentially private fine-tuning process is expected to take around 1 minute with 100 epochs.
 
 Some comparison distributions are listed below:
 
