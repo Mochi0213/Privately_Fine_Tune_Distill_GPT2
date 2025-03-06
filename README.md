@@ -30,7 +30,7 @@ Some comparison distributions are listed below:
 
 2-Way Marginal Distributions:
 
-![education vs sex](plots/education vs sex.png)
+![education_vs_sex](plots/education_vs_sex.png)
 
-![workclass vs hours-per-week](workclass vs hours-per-week.png)
+![workclass_vs_hours-per-week](workclass_vs_hours-per-week.png)
 
