@@ -32,5 +32,5 @@ Some comparison distributions are listed below:
 
 ![education_vs_sex](plots/education_vs_sex.png)
 
-![workclass_vs_hours-per-week](workclass_vs_hours-per-week.png)
+![workclass_vs_hours-per-week](plots/workclass_vs_hours-per-week.png)
 
