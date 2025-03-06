@@ -1,82 +1,125 @@
+import argparse
 import torch
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, TrainingArguments, Trainer, DataCollatorForLanguageModeling
+from transformers import GPT2Tokenizer, GPT2LMHeadModel, DataCollatorForLanguageModeling
 from datasets import load_dataset
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-from private_transformers import PrivacyEngine
-from torch import nn
-import torch.nn.functional as F
+from utils.dp_optimizer import DPAdam_Optimizer
+from utils.sampling import get_data_loaders_possion
 
+parser = argparse.ArgumentParser()
 
+parser.add_argument('--output_dir', type=str, default="./model")
+
+parser.add_argument('--lr', type=float, default=1e-3)
+parser.add_argument('--momentum', type=float, default=0.9)
+parser.add_argument('--iter', type=int, default=500)
+
+parser.add_argument('--sigma', type=float, default=0.1)
+parser.add_argument('--C', type=float, default=0.1)
+parser.add_argument('--epsilon', type=float, default=3.0)
+parser.add_argument('--delta', type=float, default=1e-5)
+parser.add_argument('--batch_size', type=int, default=10)
+parser.add_argument('--device', type=str, default='cuda',choices=['cpu', 'cuda'])
+
+args = parser.parse_args()
+###
 dataset = load_dataset("text", data_files="processed_data.txt")
 train_dataset = dataset["train"]
+###
 
+### Load Model and Tokenizer
+model = GPT2LMHeadModel.from_pretrained("distilgpt2")
 tokenizer = GPT2Tokenizer.from_pretrained("distilgpt2")
+###
+
+
+### Tokenizing train_dataset
+def tokenize_function(examples):
+    return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
+
 tokenizer.pad_token = tokenizer.eos_token
 
-def tokenize_function(examples):
-    return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=256)
+train_dataset = train_dataset.map(tokenize_function, batched=True, remove_columns=["text"])
+###
+print("train_dataset包含总样本数:", len(train_dataset))
+print(train_dataset[0])
+###
 
-
-train_dataset = train_dataset.map(tokenize_function,
-                                  batched=True,
-                                  remove_columns=["text"],)
-
-model = GPT2LMHeadModel.from_pretrained("distilgpt2")
-
-training_args = TrainingArguments(
-    output_dir="./model",
-    evaluation_strategy="no",
-    save_strategy="epoch",
-    num_train_epochs=100,
-    per_device_train_batch_size=10,
-    warmup_steps=1000,
-    weight_decay=0.01,
-    logging_dir="./logs",
-    logging_steps=10,
-    save_total_limit=10,
-    learning_rate=3e-5,
-    disable_tqdm=False
-)
+### DP optimizer
+optimizer = DPAdam_Optimizer(
+    l2_norm_clip=args.C,
+    noise_multiplier=args.sigma,
+    minibatch_size=args.batch_size,
+    microbatch_size=1,
+    params=model.parameters(),
+    lr = args.lr
+    )
 
 data_collator = DataCollatorForLanguageModeling(
     tokenizer=tokenizer,
     mlm=False
 )
 
-train_dataloader = DataLoader(train_dataset, batch_size=training_args.per_device_train_batch_size,
-                              collate_fn=data_collator)
+minibatch_loader, microbatch_loader = get_data_loaders_possion(
+    minibatch_size=args.batch_size, 
+    microbatch_size=1,
+    iterations=1,
+    collate_fn=data_collator
+    )
+class WrappedDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=training_args.learning_rate)
+    def __getitem__(self, idx):
 
-privacy_engine = PrivacyEngine(
-    model,
-    batch_size=training_args.per_device_train_batch_size,
-    sample_size=len(train_dataset),
-    epochs=training_args.num_train_epochs,
-    max_grad_norm=0.1,
-    target_epsilon=1,
-)
-privacy_engine.attach(optimizer)
-criterion = nn.CrossEntropyLoss()
+        return self.dataset[int(idx)]
 
-for epoch in range(training_args.num_train_epochs):
+    def __len__(self):
+        return len(self.dataset)
+
+train_dataset = WrappedDataset(train_dataset)
+
+least_loss = 99999.0
+least_loss_dir = './least_loss_model'
+
+for i in range(args.iter):
+    train_dl = minibatch_loader(train_dataset)
     model.train()
-    total_loss = 0
-    for batch in tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{training_args.num_train_epochs}"):
-        optimizer.zero_grad()
-        outputs = model(**batch)
+    loss = 0.0
+    for id, batch in enumerate(train_dl):
+        batch_len = len(batch['input_ids'])
+        optimizer.minibatch_size = batch_len
+        optimizer.zero_accum_grad()
+        for iid in range(batch_len):
+            optimizer.zero_microbatch_grad()
 
-        labels = batch['input_ids'][:, 1:, ]
-        logits = outputs.logits[:, :-1, :].permute(0, 2, 1)
+            input_ids_sample = batch["input_ids"][0]
+            attention_mask_sample = batch["attention_mask"][0]
+            labels_sample = batch["labels"][0]
+            sample= {
+                "input_ids": input_ids_sample.unsqueeze(0),
+                "attention_mask": attention_mask_sample.unsqueeze(0),
+                "labels": labels_sample.unsqueeze(0),
+            }
 
-        loss = F.cross_entropy(logits, labels, reduction="none").mean(dim=1)
-        optimizer.step(loss=loss)
-        total_loss += loss.mean().item()
+            output = model(**sample)
+            labels = sample['input_ids'][:, 1:, ]
+            logits = output.logits[:, :-1, :].permute(0, 2, 1)
+            sample_loss = torch.nn.functional.cross_entropy(logits, labels, reduction="none").mean(dim=1)
+            sample_loss.backward()
+            loss += sample_loss.item()
+            optimizer.microbatch_step()
+        optimizer.step_dp()
+    loss /=batch_len
 
-    print(f"Epoch {epoch + 1} Loss: {total_loss / len(train_dataloader)}")
+    if loss < least_loss:
+        least_loss = loss
+        model.save_pretrained(least_loss_dir)
+        tokenizer.save_pretrained(least_loss_dir)
 
-model.save_pretrained("fine_tuned_gpt2")
-tokenizer.save_pretrained("fine_tuned_gpt2")
+    print(f'iters:{i}, |'f' Average loss: {loss:.4f}')
+
+
+model.save_pretrained("fine_tuned_gpt2_dp")
+tokenizer.save_pretrained("fine_tuned_gpt2_dp")
 
 print("Train Completed, Fine Tuned Model parameters have been stored in fine_tuned_gpt2")
