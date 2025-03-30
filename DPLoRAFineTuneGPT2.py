@@ -4,6 +4,7 @@ from transformers import GPT2Tokenizer, GPT2LMHeadModel, DataCollatorForLanguage
 from datasets import load_dataset
 from utils.dp_optimizer import DPAdam_Optimizer
 from utils.sampling import get_data_loaders_possion
+from peft import get_peft_model, LoraConfig, TaskType
 
 parser = argparse.ArgumentParser()
 
@@ -31,6 +32,16 @@ model = GPT2LMHeadModel.from_pretrained("distilgpt2")
 tokenizer = GPT2Tokenizer.from_pretrained("distilgpt2")
 ###
 
+lora_config = LoraConfig(
+    r=8,                             # 低秩矩阵的秩
+    lora_alpha=16,                   # 缩放因子
+    target_modules=["c_attn", "c_proj"],  # GPT2 中的关键全连接层
+    lora_dropout=0.05,
+    bias="none",
+    task_type=TaskType.CAUSAL_LM
+)
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
 
 ### Tokenizing train_dataset
 def tokenize_function(examples):
@@ -50,7 +61,7 @@ optimizer = DPAdam_Optimizer(
     noise_multiplier=args.sigma,
     minibatch_size=args.batch_size,
     microbatch_size=1,
-    params=model.parameters(),
+    params = filter(lambda p: p.requires_grad, model.parameters()),
     lr = args.lr
     )
 
@@ -119,7 +130,7 @@ for i in range(args.iter):
     print(f'iters:{i}, |'f' Average loss: {loss:.4f}')
 
 
-model.save_pretrained("fine_tuned_gpt2_dp_2")
-tokenizer.save_pretrained("fine_tuned_gpt2_dp_2")
+model.save_pretrained("fine_tuned_gpt2_dp_lora")
+tokenizer.save_pretrained("fine_tuned_gpt2_dp_lora")
 
 print("Train Completed, Fine Tuned Model parameters have been stored in fine_tuned_gpt2_dp_2")
